@@ -23,6 +23,10 @@ body {
   align-items: center;
   justify-content: center;
   padding: 16px;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .game-wrap {
@@ -144,6 +148,17 @@ body {
   display: block;
   pointer-events: none;
   transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+@media (hover: none) {
+  .cell:active {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+
+  .cell.selected {
+    transform: scale(1.05);
+  }
 }
 
 @media (hover: hover) {
@@ -525,8 +540,10 @@ body {
 }
 
 .modal p {
-  font-size: 1.25rem;
-  margin-bottom: 16px;
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+  white-space: pre-line;
+  line-height: 1.6;
 }
 
 .modal button,
@@ -540,11 +557,25 @@ body {
   cursor: pointer;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(232, 93, 138, 0.4);
+  display: block;
+  margin: 8px auto;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.modal button:hover,
+.modal button:hover:not(.hidden),
 .hint-btn:hover {
   filter: brightness(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(232, 93, 138, 0.5);
+}
+
+#next-level-btn {
+  background: linear-gradient(180deg, #6ecfaa, #4aa88a);
+  box-shadow: 0 4px 12px rgba(110, 207, 170, 0.4);
+}
+
+#next-level-btn:hover {
+  box-shadow: 0 6px 16px rgba(110, 207, 170, 0.5);
 }
 
 .footer {
@@ -899,7 +930,117 @@ body {
   100% { opacity: 1; transform: scale(1.1); }
 }
 
-@media (max-width: 400px) {
-  .header h1 { font-size: 1.4rem; }
-  .board { gap: 3px; padding: 8px; }
+@media (max-width: 520px) {
+  body {
+    padding: 8px;
+  }
+
+  .game-wrap {
+    width: 100%;
+  }
+
+  .header h1 {
+    font-size: 1.3rem;
+  }
+
+  .stats {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    min-width: 70px;
+    padding: 6px 10px;
+    border-radius: 12px;
+  }
+
+  .stat .label {
+    font-size: 0.65rem;
+  }
+
+  .stat .value {
+    font-size: 1.1rem;
+  }
+
+  .board {
+    gap: 3px;
+    padding: 6px;
+    border-radius: 16px;
+  }
+
+  .cell {
+    border-radius: 8px;
+    border-width: 1px;
+  }
+
+  .special-badge {
+    font-size: 0.5rem;
+    padding: 1px 3px;
+    right: 1px;
+    bottom: 1px;
+  }
+
+  .modal {
+    padding: 20px 16px;
+    margin: 10px;
+  }
+
+  .modal p {
+    font-size: 1rem;
+    margin-bottom: 16px;
+  }
+
+  .modal button,
+  .hint-btn {
+    padding: 10px 20px;
+    font-size: 0.95rem;
+    width: 100%;
+    max-width: 200px;
+  }
+
+  .score-popup {
+    font-size: 0.75rem;
+  }
+
+  .combo-label {
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .header h1 {
+    font-size: 1.1rem;
+  }
+
+  .stats {
+    gap: 4px;
+  }
+
+  .stat {
+    min-width: 60px;
+    padding: 5px 8px;
+  }
+
+  .stat .label {
+    font-size: 0.6rem;
+  }
+
+  .stat .value {
+    font-size: 1rem;
+  }
+
+  .board {
+    gap: 2px;
+    padding: 5px;
+  }
+
+  .modal p {
+    font-size: 0.9rem;
+  }
+}
+
+@media (min-width: 521px) {
+  .game-wrap {
+    width: min(100%, 480px);
+  }
 }

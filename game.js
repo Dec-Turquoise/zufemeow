@@ -1,8 +1,6 @@
 const ROWS = 8;
 const COLS = 8;
 const TYPES = 6;
-const INITIAL_MOVES = 30;
-const TARGET_SCORE = 5000;
 const SWAP_MS = 320;
 const CAT_IMAGES = [
   "cat1.jpg",
@@ -11,6 +9,17 @@ const CAT_IMAGES = [
   "cat4.jpg",
   "cat5.jpg",
   "cat6.jpg",
+];
+
+const LEVELS = [
+  { level: 1, targetScore: 3000, moves: 25, name: "入门喵喵" },
+  { level: 2, targetScore: 5000, moves: 28, name: "初级喵士" },
+  { level: 3, targetScore: 8000, moves: 30, name: "中级喵师" },
+  { level: 4, targetScore: 12000, moves: 32, name: "高级喵师" },
+  { level: 5, targetScore: 16000, moves: 30, name: "喵星达人" },
+  { level: 6, targetScore: 20000, moves: 30, name: "喵星大师" },
+  { level: 7, targetScore: 25000, moves: 28, name: "喵神降临" },
+  { level: 8, targetScore: 30000, moves: 28, name: "传说喵皇" },
 ];
 
 const SPECIAL = {
@@ -23,19 +32,23 @@ const SPECIAL = {
 let grid = [];
 let selected = null;
 let score = 0;
-let moves = INITIAL_MOVES;
+let moves = 0;
 let busy = false;
 let gameOver = false;
 let lastSwap = null;
+let currentLevel = 0;
 
 const boardEl = document.getElementById("board");
 const fxLayerEl = document.getElementById("fx-layer");
 const scoreEl = document.getElementById("score");
+const levelEl = document.getElementById("level");
 const PARTICLE_COLORS = ["#ff8fab", "#ffd166", "#fff", "#ffb7c5", "#ffc8dd", "#e85d8a"];
 const movesEl = document.getElementById("moves");
+const targetEl = document.getElementById("target");
 const overlayEl = document.getElementById("overlay");
 const overlayMsgEl = document.getElementById("overlay-msg");
 const restartBtn = document.getElementById("restart-btn");
+const nextLevelBtn = document.getElementById("next-level-btn");
 
 function tile(type, special = null) {
   return { type, special };
@@ -956,13 +969,18 @@ function shuffleBoard() {
   }
 }
 
+function getCurrentLevelData() {
+  return LEVELS[currentLevel] || LEVELS[0];
+}
+
 function checkEnd() {
-  if (score >= TARGET_SCORE) {
+  const levelData = getCurrentLevelData();
+  if (score >= levelData.targetScore) {
     endGame(true);
     return;
   }
   if (moves <= 0) {
-    endGame(score >= TARGET_SCORE);
+    endGame(score >= levelData.targetScore);
     return;
   }
   if (!hasPossibleMove()) {
@@ -974,21 +992,42 @@ function checkEnd() {
 function endGame(won) {
   gameOver = true;
   overlayEl.classList.remove("hidden");
-  overlayMsgEl.textContent = won
-    ? `太棒了！得分 ${score}，喵喵大师！`
-    : `步数用完了，得分 ${score}，再试一次吧～`;
+  const levelData = getCurrentLevelData();
+  
+  if (won) {
+    const hasNextLevel = currentLevel < LEVELS.length - 1;
+    if (hasNextLevel) {
+      overlayMsgEl.textContent = `🎉 恭喜过关！\n${levelData.name}\n得分: ${score}`;
+      nextLevelBtn.classList.remove("hidden");
+      restartBtn.textContent = "重玩本关";
+    } else {
+      overlayMsgEl.textContent = `🏆 恭喜通关！\n你已经完成了所有关卡！\n最终得分: ${score}`;
+      nextLevelBtn.classList.add("hidden");
+      restartBtn.textContent = "重新开始";
+    }
+  } else {
+    overlayMsgEl.textContent = `😿 挑战失败！\n目标: ${levelData.targetScore} | 得分: ${score}\n再试一次吧～`;
+    nextLevelBtn.classList.add("hidden");
+    restartBtn.textContent = "重新挑战";
+  }
 }
 
-function resetGame() {
+function startLevel(levelIndex) {
+  currentLevel = levelIndex;
+  const levelData = getCurrentLevelData();
   score = 0;
-  moves = INITIAL_MOVES;
+  moves = levelData.moves;
   gameOver = false;
   busy = false;
   selected = null;
   lastSwap = null;
+  
+  levelEl.textContent = levelData.level;
   scoreEl.textContent = "0";
   movesEl.textContent = moves;
+  targetEl.textContent = levelData.targetScore;
   overlayEl.classList.add("hidden");
+  
   createGrid();
   while (findMatchData().matched.size > 0 || !hasPossibleMove()) {
     createGrid();
@@ -996,10 +1035,21 @@ function resetGame() {
   render();
 }
 
+function resetGame() {
+  startLevel(0);
+}
+
+function nextLevel() {
+  if (currentLevel < LEVELS.length - 1) {
+    startLevel(currentLevel + 1);
+  }
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 restartBtn.addEventListener("click", resetGame);
+nextLevelBtn.addEventListener("click", nextLevel);
 
 resetGame();
