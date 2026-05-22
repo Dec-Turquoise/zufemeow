@@ -12,14 +12,14 @@ const CAT_IMAGES = [
 ];
 
 const LEVELS = [
-  { level: 1, targetScore: 3000, moves: 25, name: "入门喵喵" },
-  { level: 2, targetScore: 5000, moves: 28, name: "初级喵士" },
-  { level: 3, targetScore: 8000, moves: 30, name: "中级喵师" },
-  { level: 4, targetScore: 12000, moves: 32, name: "高级喵师" },
-  { level: 5, targetScore: 16000, moves: 30, name: "喵星达人" },
-  { level: 6, targetScore: 20000, moves: 30, name: "喵星大师" },
-  { level: 7, targetScore: 25000, moves: 28, name: "喵神降临" },
-  { level: 8, targetScore: 30000, moves: 28, name: "传说喵皇" },
+  { level: 1, targetScore: 2000, moves: 30, name: "入门喵喵" },
+  { level: 2, targetScore: 3500, moves: 32, name: "初级喵士" },
+  { level: 3, targetScore: 5000, moves: 35, name: "中级喵师" },
+  { level: 4, targetScore: 7000, moves: 35, name: "高级喵师" },
+  { level: 5, targetScore: 9000, moves: 35, name: "喵星达人" },
+  { level: 6, targetScore: 12000, moves: 35, name: "喵星大师" },
+  { level: 7, targetScore: 15000, moves: 35, name: "喵神降临" },
+  { level: 8, targetScore: 18000, moves: 35, name: "传说喵皇" },
 ];
 
 const SPECIAL = {
@@ -37,6 +37,9 @@ let busy = false;
 let gameOver = false;
 let lastSwap = null;
 let currentLevel = 0;
+let soundEnabled = true;
+let audioContext = null;
+let bgmStarted = false;
 
 const boardEl = document.getElementById("board");
 const fxLayerEl = document.getElementById("fx-layer");
@@ -49,6 +52,207 @@ const overlayEl = document.getElementById("overlay");
 const overlayMsgEl = document.getElementById("overlay-msg");
 const restartBtn = document.getElementById("restart-btn");
 const nextLevelBtn = document.getElementById("next-level-btn");
+const soundToggleBtn = document.getElementById("sound-toggle");
+
+function initAudio() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+function playSound(frequency, duration, type = "sine", volume = 0.1) {
+  if (!soundEnabled) return;
+  
+  try {
+    initAudio();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    const filterNode = audioContext.createBiquadFilter();
+    
+    oscillator.connect(filterNode);
+    filterNode.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    
+    filterNode.type = "lowpass";
+    filterNode.frequency.setValueAtTime(frequency * 2, audioContext.currentTime);
+    
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch (e) {
+    console.log("Audio not supported");
+  }
+}
+
+function playDrums(frequency, duration, volume = 0.15) {
+  if (!soundEnabled) return;
+  
+  try {
+    initAudio();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.3, audioContext.currentTime + duration);
+    
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch (e) {
+    console.log("Audio not supported");
+  }
+}
+
+function playClickSound() {
+  playSound(1200, 0.08, "square", 0.12);
+  playSound(1800, 0.05, "sine", 0.06);
+}
+
+function playSwapSound() {
+  playSound(523, 0.12, "square", 0.1);
+  playSound(659, 0.12, "square", 0.1);
+  playDrums(80, 0.08, 0.08);
+}
+
+function playMatchSound(combo = 1) {
+  const baseFreq = 523;
+  const notes = [baseFreq, baseFreq * 1.26, baseFreq * 1.587, baseFreq * 2, baseFreq * 2.52];
+  const volumes = [0.15, 0.12, 0.1, 0.08, 0.06];
+  
+  notes.slice(0, Math.min(combo + 2, notes.length)).forEach((freq, i) => {
+    setTimeout(() => {
+      playSound(freq, 0.25, "square", volumes[i]);
+      if (i === 0) playDrums(60, 0.1, 0.12);
+    }, i * 60);
+  });
+  
+  if (combo >= 3) {
+    setTimeout(() => playDrums(120, 0.15, 0.1), 120);
+  }
+  if (combo >= 5) {
+    setTimeout(() => playDrums(180, 0.1, 0.08), 200);
+  }
+}
+
+function playDropSound() {
+  playSound(150 + Math.random() * 200, 0.15, "sawtooth", 0.05);
+}
+
+function playWinSound() {
+  const notes = [523, 659, 784, 1047, 1296, 1568];
+  notes.forEach((freq, i) => {
+    setTimeout(() => {
+      playSound(freq, 0.35, "sine", 0.15);
+      if (i % 2 === 0) playDrums(80, 0.12, 0.1);
+    }, i * 120);
+  });
+  setTimeout(() => playDrums(40, 0.2, 0.15), 480);
+}
+
+function playLoseSound() {
+  playSound(200, 0.4, "sawtooth", 0.15);
+  setTimeout(() => playSound(150, 0.5, "sawtooth", 0.12), 150);
+  setTimeout(() => playDrums(60, 0.2, 0.1), 100);
+}
+
+function playStripeSound(isHorizontal) {
+  if (!soundEnabled) return;
+  
+  const notes = isHorizontal ? [220, 247, 262, 294, 330, 349, 392, 440] : [440, 392, 349, 330, 294, 262, 247, 220];
+  notes.forEach((freq, i) => {
+    setTimeout(() => playSound(freq, 0.12, "sawtooth", 0.18), i * 30);
+  });
+  playDrums(100, 0.2, 0.2);
+}
+
+function playBombSound() {
+  if (!soundEnabled) return;
+  
+  playSound(1000, 0.15, "square", 0.35);
+  setTimeout(() => {
+    playSound(500, 0.25, "sawtooth", 0.4);
+    playDrums(80, 0.35, 0.35);
+  }, 60);
+  setTimeout(() => playSound(250, 0.5, "sawtooth", 0.3), 120);
+}
+
+function playRainbowSound() {
+  if (!soundEnabled) return;
+  
+  const rainbowNotes = [523, 659, 784, 1047, 1296, 1568, 1047, 784, 659, 523];
+  rainbowNotes.forEach((freq, i) => {
+    setTimeout(() => playSound(freq, 0.15, "sine", 0.12 - i * 0.008), i * 50);
+  });
+}
+
+function playSpecialCreateSound(special) {
+  if (!soundEnabled) return;
+  
+  if (special === SPECIAL.STRIPE_H || special === SPECIAL.STRIPE_V) {
+    playSound(659, 0.2, "sine", 0.1);
+    playSound(880, 0.2, "sine", 0.08);
+  } else if (special === SPECIAL.BOMB) {
+    playSound(440, 0.2, "triangle", 0.1);
+    setTimeout(() => playSound(220, 0.25, "sawtooth", 0.12), 100);
+  } else if (special === SPECIAL.RAINBOW) {
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      setTimeout(() => playSound(freq, 0.2, "sine", 0.1), i * 80);
+    });
+  }
+}
+
+let bgmInterval = null;
+let bgmVolume = 0.03;
+
+function startBGM() {
+  if (!soundEnabled || bgmInterval) return;
+  
+  const notes = [523, 659, 784, 880, 1047, 1175, 1319, 1397];
+  const rhythm = [0, 2, 4, 5, 7, 5, 4, 2];
+  let noteIndex = 0;
+  
+  bgmInterval = setInterval(() => {
+    if (!soundEnabled) {
+      stopBGM();
+      return;
+    }
+    
+    const note = notes[rhythm[noteIndex % rhythm.length]];
+    playSound(note, 0.4, "triangle", bgmVolume);
+    
+    noteIndex++;
+  }, 500);
+}
+
+function stopBGM() {
+  if (bgmInterval) {
+    clearInterval(bgmInterval);
+    bgmInterval = null;
+  }
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  soundToggleBtn.textContent = soundEnabled ? "🔊" : "🔇";
+  
+  if (soundEnabled) {
+    startBGM();
+  } else {
+    stopBGM();
+  }
+}
 
 function tile(type, special = null) {
   return { type, special };
@@ -154,6 +358,13 @@ function getCellEl(r, c) {
 
 function onCellClick(r, c) {
   if (busy || gameOver || isEmpty(grid[r][c])) return;
+  
+  if (!bgmStarted && soundEnabled) {
+    startBGM();
+    bgmStarted = true;
+  }
+  
+  playClickSound();
   clearHints();
   if (!selected) {
     selected = { r, c };
@@ -221,6 +432,7 @@ async function trySwap(r1, c1, r2, c2) {
   clearHints();
   lastSwap = { r1, c1, r2, c2 };
 
+  playSwapSound();
   await animateSwapCells(r1, c1, r2, c2);
   swap(r1, c1, r2, c2);
   render();
@@ -623,6 +835,7 @@ async function playRainbowVortex(colorType, rainbowPos, cellKeys) {
 }
 
 async function comboRainbowColor(colorType, rainbowPos) {
+  playRainbowSound();
   const cells = cellsOfColor(colorType);
   cells.add(key(rainbowPos.r, rainbowPos.c));
   await playRainbowVortex(colorType, rainbowPos, cells);
@@ -634,6 +847,7 @@ async function comboRainbowColor(colorType, rainbowPos) {
 }
 
 async function comboRainbowStripe(colorType, stripeKind) {
+  playRainbowSound();
   const targets = [...cellsOfColor(colorType)];
   const toClear = new Set();
   const stripes = [];
@@ -657,6 +871,7 @@ async function comboRainbowStripe(colorType, stripeKind) {
 }
 
 async function comboRainbowBomb(colorType) {
+  playRainbowSound();
   const targets = [...cellsOfColor(colorType)];
   const toClear = new Set();
 
@@ -830,6 +1045,7 @@ async function resolveMatches() {
     const { matched, runs } = findMatchData();
     if (matched.size === 0) break;
     combo++;
+    playMatchSound(combo);
 
     const creation = detectSpecialCreation(matched, runs);
     const spawnKey = creation ? key(creation.spawn.r, creation.spawn.c) : null;
@@ -840,8 +1056,10 @@ async function resolveMatches() {
       const t = grid[r][c];
       if (!t?.special) return;
       if (t.special === SPECIAL.STRIPE_H || t.special === SPECIAL.STRIPE_V) {
+        playStripeSound(t.special === SPECIAL.STRIPE_H);
         activateStripe(r, c, t).forEach((kk) => toClear.add(kk));
       } else if (t.special === SPECIAL.BOMB) {
+        playBombSound();
         activateBomb(r, c).forEach((kk) => toClear.add(kk));
       }
     });
@@ -871,6 +1089,7 @@ async function resolveMatches() {
     if (creation) {
       const { r, c } = creation.spawn;
       grid[r][c] = tile(creation.type, creation.special);
+      playSpecialCreateSound(creation.special);
     }
 
     applyGravity();
@@ -995,6 +1214,7 @@ function endGame(won) {
   const levelData = getCurrentLevelData();
   
   if (won) {
+    playWinSound();
     const hasNextLevel = currentLevel < LEVELS.length - 1;
     if (hasNextLevel) {
       overlayMsgEl.textContent = `🎉 恭喜过关！\n${levelData.name}\n得分: ${score}`;
@@ -1006,6 +1226,7 @@ function endGame(won) {
       restartBtn.textContent = "重新开始";
     }
   } else {
+    playLoseSound();
     overlayMsgEl.textContent = `😿 挑战失败！\n目标: ${levelData.targetScore} | 得分: ${score}\n再试一次吧～`;
     nextLevelBtn.classList.add("hidden");
     restartBtn.textContent = "重新挑战";
@@ -1036,6 +1257,8 @@ function startLevel(levelIndex) {
 }
 
 function resetGame() {
+  bgmStarted = false;
+  stopBGM();
   startLevel(0);
 }
 
@@ -1051,5 +1274,6 @@ function sleep(ms) {
 
 restartBtn.addEventListener("click", resetGame);
 nextLevelBtn.addEventListener("click", nextLevel);
+soundToggleBtn.addEventListener("click", toggleSound);
 
 resetGame();
