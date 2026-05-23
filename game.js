@@ -166,51 +166,22 @@ function playLoseSound() {
   setTimeout(() => playDrums(60, 0.2, 0.1), 100);
 }
 
-function playStripeSound(isHorizontal) {
-  if (!soundEnabled) return;
-  
-  const notes = isHorizontal ? [220, 247, 262, 294, 330, 349, 392, 440] : [440, 392, 349, 330, 294, 262, 247, 220];
+function playStripeSound() {
+  const notes = [523, 659, 784, 1047];
   notes.forEach((freq, i) => {
-    setTimeout(() => playSound(freq, 0.12, "sawtooth", 0.18), i * 30);
+    setTimeout(() => {
+      playSound(freq, 0.2, "square", 0.18);
+      if (i === 0) playDrums(100, 0.15, 0.15);
+    }, i * 50);
   });
-  playDrums(100, 0.2, 0.2);
 }
 
 function playBombSound() {
-  if (!soundEnabled) return;
-  
-  playSound(1000, 0.15, "square", 0.35);
-  setTimeout(() => {
-    playSound(500, 0.25, "sawtooth", 0.4);
-    playDrums(80, 0.35, 0.35);
-  }, 60);
-  setTimeout(() => playSound(250, 0.5, "sawtooth", 0.3), 120);
-}
-
-function playRainbowSound() {
-  if (!soundEnabled) return;
-  
-  const rainbowNotes = [523, 659, 784, 1047, 1296, 1568, 1047, 784, 659, 523];
-  rainbowNotes.forEach((freq, i) => {
-    setTimeout(() => playSound(freq, 0.15, "sine", 0.12 - i * 0.008), i * 50);
-  });
-}
-
-function playSpecialCreateSound(special) {
-  if (!soundEnabled) return;
-  
-  if (special === SPECIAL.STRIPE_H || special === SPECIAL.STRIPE_V) {
-    playSound(659, 0.2, "sine", 0.1);
-    playSound(880, 0.2, "sine", 0.08);
-  } else if (special === SPECIAL.BOMB) {
-    playSound(440, 0.2, "triangle", 0.1);
-    setTimeout(() => playSound(220, 0.25, "sawtooth", 0.12), 100);
-  } else if (special === SPECIAL.RAINBOW) {
-    const notes = [523, 659, 784, 1047];
-    notes.forEach((freq, i) => {
-      setTimeout(() => playSound(freq, 0.2, "sine", 0.1), i * 80);
-    });
-  }
+  playSound(100, 0.1, "sawtooth", 0.2);
+  setTimeout(() => playSound(80, 0.2, "sawtooth", 0.25), 50);
+  setTimeout(() => playSound(60, 0.3, "sawtooth", 0.2), 100);
+  setTimeout(() => playDrums(40, 0.25, 0.3), 30);
+  setTimeout(() => playDrums(30, 0.3, 0.25), 80);
 }
 
 let bgmInterval = null;
@@ -444,6 +415,27 @@ async function trySwap(r1, c1, r2, c2) {
   if (specialSwap) {
     const ok = await handleSpecialSwap(r1, c1, r2, c2);
     if (!ok) {
+      const a = grid[r1][c1];
+      const b = grid[r2][c2];
+      const isStripeOrBombSwap = (a?.special && a.special !== SPECIAL.RAINBOW) || (b?.special && b.special !== SPECIAL.RAINBOW);
+      if (isStripeOrBombSwap) {
+        const { matched } = findMatchData();
+        if (matched.size === 0) {
+          await animateSwapCells(r1, c1, r2, c2);
+          swap(r1, c1, r2, c2);
+          render();
+          lastSwap = null;
+          busy = false;
+          return;
+        }
+        moves--;
+        movesEl.textContent = moves;
+        await settleBoard();
+        checkEnd();
+        lastSwap = null;
+        busy = false;
+        return;
+      }
       await animateSwapCells(r1, c1, r2, c2);
       swap(r1, c1, r2, c2);
       render();
@@ -591,7 +583,10 @@ function detectSpecialCreation(matched, runs) {
   }
 
   if (hasLTShape(matched, runs)) {
-    return { spawn, special: SPECIAL.BOMB, type: baseType };
+    const has5InTotal = matched.size >= 5;
+    if (has5InTotal) {
+      return { spawn, special: SPECIAL.BOMB, type: baseType };
+    }
   }
 
   const line4 = runs.find((x) => x.len >= 4);
@@ -750,10 +745,7 @@ async function handleSpecialSwap(r1, c1, r2, c2) {
     return await comboTwoSpecials(r1, c1, r2, c2, a, b);
   }
 
-  const single = a.special ? { tile: a, r: r1, c: c1 } : { tile: b, r: r2, c: c2 };
-  const cells = activateSingleSpecial(single.r, single.c, single.tile);
-  await clearCells(cells, 1, specialLabel(single.tile.special));
-  return true;
+  return false;
 }
 
 function activateSingleSpecial(r, c, t) {
@@ -835,7 +827,6 @@ async function playRainbowVortex(colorType, rainbowPos, cellKeys) {
 }
 
 async function comboRainbowColor(colorType, rainbowPos) {
-  playRainbowSound();
   const cells = cellsOfColor(colorType);
   cells.add(key(rainbowPos.r, rainbowPos.c));
   await playRainbowVortex(colorType, rainbowPos, cells);
@@ -847,7 +838,6 @@ async function comboRainbowColor(colorType, rainbowPos) {
 }
 
 async function comboRainbowStripe(colorType, stripeKind) {
-  playRainbowSound();
   const targets = [...cellsOfColor(colorType)];
   const toClear = new Set();
   const stripes = [];
@@ -871,7 +861,6 @@ async function comboRainbowStripe(colorType, stripeKind) {
 }
 
 async function comboRainbowBomb(colorType) {
-  playRainbowSound();
   const targets = [...cellsOfColor(colorType)];
   const toClear = new Set();
 
@@ -904,6 +893,7 @@ async function comboTwoSpecials(r1, c1, r2, c2, a, b) {
   if (stripeA && stripeB) {
     activateStripe(r1, c1, a).forEach((k) => toClear.add(k));
     activateStripe(r2, c2, b).forEach((k) => toClear.add(k));
+    playStripeSound();
     await clearCells(toClear, 2, "十字扫喵！");
   } else if ((stripeA && bombB) || (stripeB && bombA)) {
     const sr = stripeA ? r1 : r2;
@@ -912,6 +902,8 @@ async function comboTwoSpecials(r1, c1, r2, c2, a, b) {
     const bc = bombA ? c1 : c2;
     const st = stripeA ? a : b;
     comboStripeBombCells(sr, sc, st, br, bc).forEach((k) => toClear.add(k));
+    playStripeSound();
+    playBombSound();
     await clearCells(toClear, 2, "扫爆组合！");
   } else if (bombA && bombB) {
     for (let dr = -2; dr <= 2; dr++) {
@@ -921,10 +913,14 @@ async function comboTwoSpecials(r1, c1, r2, c2, a, b) {
         if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) toClear.add(key(nr, nc));
       }
     }
+    playBombSound();
+    setTimeout(() => playBombSound(), 100);
     await clearCells(toClear, 2, "超级大爆破！");
   } else {
     activateSingleSpecial(r1, c1, a).forEach((k) => toClear.add(k));
     activateSingleSpecial(r2, c2, b).forEach((k) => toClear.add(k));
+    if (stripeA || stripeB) playStripeSound();
+    if (bombA || bombB) playBombSound();
     await clearCells(toClear, 2, "特效组合！");
   }
 
@@ -1051,18 +1047,24 @@ async function resolveMatches() {
     const spawnKey = creation ? key(creation.spawn.r, creation.spawn.c) : null;
     const toClear = new Set(matched);
 
+    let hasStripeActivate = false;
+    let hasBombActivate = false;
+    
     matched.forEach((k) => {
       const { r, c } = parseKey(k);
       const t = grid[r][c];
       if (!t?.special) return;
       if (t.special === SPECIAL.STRIPE_H || t.special === SPECIAL.STRIPE_V) {
-        playStripeSound(t.special === SPECIAL.STRIPE_H);
         activateStripe(r, c, t).forEach((kk) => toClear.add(kk));
+        hasStripeActivate = true;
       } else if (t.special === SPECIAL.BOMB) {
-        playBombSound();
         activateBomb(r, c).forEach((kk) => toClear.add(kk));
+        hasBombActivate = true;
       }
     });
+    
+    if (hasStripeActivate && !creation) playStripeSound();
+    if (hasBombActivate && !creation) playBombSound();
 
     if (spawnKey) toClear.delete(spawnKey);
 
@@ -1075,6 +1077,15 @@ async function resolveMatches() {
     });
 
     const fxLabel = creation ? specialCreateLabel(creation.special) : undefined;
+    
+    if (creation) {
+      if (creation.special === SPECIAL.STRIPE_H || creation.special === SPECIAL.STRIPE_V) {
+        playStripeSound();
+      } else if (creation.special === SPECIAL.BOMB) {
+        playBombSound();
+      }
+    }
+    
     playMatchEffects(toClear, combo, totalPoints, fxLabel);
     await sleep(450);
 
@@ -1089,7 +1100,6 @@ async function resolveMatches() {
     if (creation) {
       const { r, c } = creation.spawn;
       grid[r][c] = tile(creation.type, creation.special);
-      playSpecialCreateSound(creation.special);
     }
 
     applyGravity();
